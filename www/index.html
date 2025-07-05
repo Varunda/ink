@@ -1,0 +1,144 @@
+
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ink</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous">
+    </script>
+
+    <link rel="preload" href="/font/AtkinsonHyperlegible-Regular.ttf" as="font" crossorigin />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"
+    integrity="sha384-b/U6ypiBEHpOf/4+1nzFpr53nxSS+GLCkfwBdFNTxtclqqenISfwAzpKaMNFNmj4" crossorigin="anonymous">
+    </script>
+
+    <meta property="og:url" content="https://ink.honu.pw" />
+    <meta property="theme-color" content="#BF40BF" data-react-helmet="true" />
+</head>
+
+<style>
+@font-face {
+    font-family: "Atkinson Hyperlegible";
+    src: url('/font/AtkinsonHyperlegible-Regular.ttf');
+}
+
+@font-face {
+    font-family: "Atkinson Hyperlegible Mono";
+    src: url("/font/AtkinsonHyperlegibleMono-Regular.ttf");
+}
+</style>
+
+<body style="font-family: 'Atkinson Hyperlegible'">
+    <div id="toaster" class="toast-container position-fixed" style="top: 0; right: 0;"></div>
+
+    <div style="font-family: 'Atkinson Hyperlegible'">
+        <div class="container">
+            <div class="text-center">
+                <h1 class="d-inline">
+                    Ink -
+                </h1>
+
+                <h3 class="d-inline">
+                    Squittal instance manager
+                </h3>
+            </div>
+
+            <div id="whoami">
+
+            </div>
+
+            <div id="create-instance" style="display: none">
+                <button onclick="create_instance()" class="btn btn-primary">
+                    Create instance
+                </button>
+            </div>
+
+            <div id="open-instance" style="display: none">
+                <a href="" id="instance-link">
+                    View instance
+                </a>
+            </div>
+
+            <div id="login" style="display: none">
+                <p>Ink uses Discord accounts to track who is creating Squittal instances.</p>
+
+                <a href="/auth/discord">
+                    Login to create an instance
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+
+<script>
+    async function whoami() {
+        const response = await fetch("/api/whoami");
+        if (response.status == 204) {
+            console.log(`not logged in`);
+            return null;
+        }
+
+        const json = await response.json();
+        console.log(json);
+
+        return json;
+    }
+
+    async function get_instance() {
+        const response = await fetch("/api/mine");
+        if (response.status == 204) {
+            return null;
+        }
+
+        if (response.status == 200) {
+            return await response.json();
+        }
+
+        throw `unexpected status of response ${response.status}`;
+    }
+
+    async function create_instance() {
+        const response = await fetch("/api/create");
+        if (response.status != 200) {
+            console.log(`failed to create instance`);
+            return null;
+        }
+
+        const json = await response.json();
+        console.log(json);
+
+        document.getElementById("instance-link").href=`${location.protocol}//${json.name}.${location.host}`;
+        document.getElementById("open-instance").style.display = "block";
+
+        return json;
+    }
+
+    (async () => {
+        const user = await whoami();
+        if (user == null) {
+            document.getElementById("login").style.display = "block";
+        } else {
+            document.getElementById("whoami").innerHTML = `hello ${user.username}`;
+
+            const inst = await get_instance();
+            if (inst != null) {
+                const name = inst.name.slice(("/squittal-").length);
+                document.getElementById("instance-link").href=`${location.protocol}//${name}.${location.host}`;
+                document.getElementById("open-instance").style.display = "block";
+            } else {
+                document.getElementById("create-instance").style.display = "block";
+            }
+        }
+    })();
+
+</script>
+
+</html>
