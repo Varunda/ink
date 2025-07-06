@@ -96,7 +96,8 @@ async fn main() {
 fn oauth_client() -> Result<BasicClient, AppError> {
     let client_id = env::var("DISCORD_CLIENT_ID").context("Missing DISCORD_CLIENT_ID!")?;
     let client_secret = env::var("DISCORD_SECRET").context("Missing DISCORD_SECRET!")?;
-    let redirect_url = "http://localhost:8000/auth/callback".to_string();
+    let redirect_url =
+        env::var("DISCORD_CALLBACK").unwrap_or("http://localhost:8000/auth/callback".to_string());
     let auth_url = "https://discord.com/api/oauth2/authorize?response_type=code".to_string();
     let token_url = "https://discord.com/api/oauth2/token".to_string();
 
