@@ -39,3 +39,14 @@ impl From<ContainerSummary> for SquittalInstance {
         };
     }
 }
+
+impl Clone for SquittalInstance {
+    fn clone(&self) -> Self {
+        return SquittalInstance {
+            name: self.name.clone(),
+            created_by: self.created_by.clone(),
+            created_on: self.created_on,
+            port: self.port,
+        };
+    }
+}

@@ -7,12 +7,23 @@ use crate::instance::SquittalInstance;
 use crate::{AppError, User, docker};
 
 ///
-/// list all instances currently running
+/// list all instances currently running. requires an authed user, and removes instance name and port from response
 ///
-pub async fn list_instances() -> Result<impl IntoResponse, AppError> {
-    let instances = docker::get_instances()
+pub async fn list_instances(_: User) -> Result<impl IntoResponse, AppError> {
+    let instances: Vec<SquittalInstance> = docker::get_instances()
         .await
         .context("failed to get running instances")?;
+
+    // remove name and port from the instances so others cannot find exposed instances and mess with them
+    let instances = instances
+        .iter()
+        .map(|iter| {
+            let mut i = iter.clone();
+            i.name = "".to_string();
+            i.port = 0;
+            return i;
+        })
+        .collect::<Vec<SquittalInstance>>();
 
     return Ok(Json(instances));
 }
@@ -73,10 +84,11 @@ pub async fn create_instance(user: User) -> Result<impl IntoResponse, AppError> 
     };
 
     tracing::info!(
-        "created instance {} for {}/{}",
+        "created instance {} for {}/{} on port {}",
         instance.name,
         &instance.created_by,
-        &user.username
+        &user.username,
+        instance.port
     );
 
     return Ok(Json(instance).into_response());

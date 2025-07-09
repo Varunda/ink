@@ -393,7 +393,7 @@ async fn instance_cleanup() {
                 instance.name
             };
 
-            if diff >= Duration::from_secs(60 * 60 * 2) {
+            if diff >= Duration::from_secs(60 * 60 * 4) {
                 println!("killing {}, diff={:?}", name, diff);
                 let result = docker::remove_container(&name).await;
                 if result.is_err() {

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, time::Duration};
 
 use bollard::{
     query_parameters::{
@@ -16,7 +16,10 @@ pub async fn get_instances() -> Result<Vec<SquittalInstance>, bollard::errors::E
     let docker = bollard::Docker::connect_with_socket_defaults()?;
 
     let container_filter: ListContainersOptions = ListContainersOptionsBuilder::new()
-        .filters(&HashMap::from([("ancestor", vec!["squittal"])]))
+        .filters(&HashMap::from([
+            ("ancestor", vec!["squittal"]),
+            ("label", vec!["ink_tag=true"]),
+        ]))
         .build();
 
     let result = docker.list_containers(Some(container_filter)).await?;
@@ -102,7 +105,7 @@ pub async fn create_container(owner: &str) -> Result<(String, u16), Box<dyn Erro
 
     let instance_name = generate_container_name();
     let container_name: String = format!("squittal-{}", instance_name).to_string();
-    println!("container name: {container_name}");
+    tracing::debug!("container name: {container_name}");
 
     let builder: CreateContainerOptionsBuilder =
         CreateContainerOptionsBuilder::new().name(&container_name);
@@ -111,48 +114,68 @@ pub async fn create_container(owner: &str) -> Result<(String, u16), Box<dyn Erro
         image: Some("squittal".to_string()),
         host_config: Some(HostConfig {
             port_bindings: Some(HashMap::from([(
-                "8080".to_string(),
+                "8080/tcp".to_string(),
                 Some(vec![PortBinding {
-                    host_ip: Some("127.0.0.1".to_string()),
+                    host_ip: Some("0.0.0.0".to_string()),
                     host_port: None, // let Docker pick the port to use
                 }]),
             )])),
+            network_mode: Some("ink".into()),
             ..Default::default()
         }),
-        exposed_ports: Some(HashMap::from([("8080".to_string(), HashMap::from([]))])),
-        labels: Some(HashMap::from([(
-            "created_by".to_string(),
-            owner.to_string(),
-        )])),
+        exposed_ports: Some(HashMap::from([("8080/tcp".to_string(), HashMap::from([]))])),
+        labels: Some(HashMap::from([
+            ("created_by".to_string(), owner.to_string()),
+            ("ink_tag".to_string(), "true".to_string()),
+        ])),
         ..Default::default()
     };
+
+    tracing::trace!("container options: {:?}", config);
 
     let container = docker
         .create_container(Some(builder.build()), config)
         .await?;
-    println!("{:?}", container);
+    tracing::debug!("created container {}", container.id);
 
     docker
         .start_container(&container_name, None::<StartContainerOptions>)
         .await?;
+    tracing::debug!("sucessfully started container {}", &container_name);
 
-    let inspect = docker
-        .inspect_container(&container_name, None::<InspectContainerOptions>)
-        .await?;
-
-    //println!("{:?}", &inspect);
-
-    let Some(port) = get_container_port(inspect) else {
-        eprintln!(
-            "failed to get port of container, killing container [name={}]",
-            &container_name
+    for i in 1..=5 {
+        tracing::debug!(
+            "attempting to get container port for {}, try {}",
+            &container_name,
+            i
         );
 
-        let _ = remove_container(&container_name).await;
-        return Err("failed to get port of new instance".into());
-    };
+        let inspect = docker
+            .inspect_container(&container_name, None::<InspectContainerOptions>)
+            .await?;
 
-    return Ok((instance_name, port));
+        let port = get_container_port(inspect);
+        if port.is_some() {
+            tracing::debug!("got container port for {} on try {}", &container_name, i);
+            return Ok((instance_name, port.unwrap()));
+        }
+
+        tracing::warn!("failed to get port of container on try {}", i);
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+
+    tracing::error!(
+        "failed to get port of container {} after 5 tries, killing container",
+        &container_name
+    );
+    match remove_container(&container_name).await {
+        Ok(_) => {}
+        Err(err) => {
+            tracing::error!("failed to kill container: {}", err);
+        }
+    }
+
+    return Err("failed to get port of container".into());
 }
 
 ///
@@ -161,12 +184,12 @@ pub async fn create_container(owner: &str) -> Result<(String, u16), Box<dyn Erro
 pub async fn remove_container(name: &str) -> Result<(), bollard::errors::Error> {
     let docker = bollard::Docker::connect_with_socket_defaults()?;
 
-    println!("stopping container {}", name);
+    tracing::info!("stopping container {}", name);
     docker
         .stop_container(name, None::<StopContainerOptions>)
         .await?;
 
-    println!("removing container {}", name);
+    tracing::info!("removing container {}", name);
     docker
         .remove_container(name, None::<RemoveContainerOptions>)
         .await?;

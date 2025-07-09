@@ -41,7 +41,7 @@
 
     <div style="font-family: 'Atkinson Hyperlegible'">
         <div class="container">
-            <div class="text-center">
+            <div class="text-center border-bottom pb-2 mb-2">
                 <h1 class="d-inline">
                     Ink -
                 </h1>
@@ -51,34 +51,87 @@
                 </h3>
             </div>
 
-            <div id="whoami">
+            <div id="whoami" class="text-center fs-3">
 
             </div>
 
             <div id="create-instance" style="display: none">
+                <div class="alert alert-warning text-center">
+                    Only create an instance if the following conditions are acceptable:
+                    <ul class="text-start mb-0">
+                        <li>The instance will last for 4 hours, with no way to extend this duration</li>
+                        <li>The instance uses a shared database, and matches will be available for others to see</li>
+                        <li>The Discord ID creating the instance will be listed publicly for anyone to see</li>
+                    </ul>
+                </div>
+
                 <button onclick="create_instance()" class="btn btn-primary">
                     Create instance
                 </button>
             </div>
 
-            <div id="open-instance" style="display: none">
-                <a href="" id="instance-link">
-                    View instance
-                </a>
+            <div id="open-instance" class="mt-3 fs-3 text-center alert alert-info" style="display: none">
+                <a href="" id="instance-link">View instance</a>
+
+                <div>
+                    This instance is valid until
+                    <span id="valid-until"></span>
+                </div>
             </div>
 
             <div id="login" style="display: none">
-                <p>Ink uses Discord accounts to track who is creating Squittal instances.</p>
+                <span class="mb-2 d-block">Ink uses Discord accounts to track who is creating Squittal instances.</span>
 
-                <a href="/auth/discord">
-                    Login to create an instance
-                </a>
+                <span class="mb-2 d-block">
+                    <a href="/auth/discord" class="btn btn-primary">
+                        Login to create an instance
+                    </a>
+                </span>
+
+                <span class="d-block">
+                    By logging in, Ink will store the following information:
+                    <ul class="mb-0">
+                        <li>Discord user ID</li>
+                        <li>Discord global username</li>
+                    </ul>
+                    This information will be stored in a cookie
+                </span>
+            </div>
+
+            <div class="mt-3 border-top pt-2">
+                <h5>Current instances: </h5>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Discord</th>
+                            <th>Created at</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="instances">
+
+                    </tbody>
+                </table>
+
+                <span id="instance-count" class="text-muted">
+                    There are currently 0 instances running
+                </span>
             </div>
         </div>
     </div>
 </body>
 
 <script>
+
+    const dateformat = new Intl.DateTimeFormat(undefined, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZoneName: "short"
+    });
+
     async function whoami() {
         const response = await fetch("/api/whoami");
         if (response.status == 204) {
@@ -118,6 +171,20 @@
         document.getElementById("instance-link").href=`${location.protocol}//${json.name}.${location.host}`;
         document.getElementById("open-instance").style.display = "block";
 
+        const endDate = new Date((inst.created_on.secs_since_epoch * 1000) + (1000 * 60 * 60 * 4));
+        document.getElementById("valid-until").innerHTML = `${dateformat.format(endDate)}`;
+
+        return json;
+    }
+
+    async function list_instances() {
+        const response = await fetch("/api/list");
+        if (response.status != 200) {
+            console.error(`failed to get instances`);
+            return [];
+        }
+
+        const json = await response.json();
         return json;
     }
 
@@ -126,16 +193,30 @@
         if (user == null) {
             document.getElementById("login").style.display = "block";
         } else {
-            document.getElementById("whoami").innerHTML = `hello ${user.username}`;
+            document.getElementById("whoami").innerHTML = `hello <strong>${user.username}</strong>`;
 
             const inst = await get_instance();
             if (inst != null) {
                 const name = inst.name.slice(("/squittal-").length);
                 document.getElementById("instance-link").href=`${location.protocol}//${name}.${location.host}`;
                 document.getElementById("open-instance").style.display = "block";
+
+                const endDate = new Date((inst.created_on.secs_since_epoch * 1000) + (1000 * 60 * 60 * 4));
+                document.getElementById("valid-until").innerHTML = `${dateformat.format(endDate)}`;
             } else {
                 document.getElementById("create-instance").style.display = "block";
             }
+
+            const list = await list_instances();
+            const table = document.getElementById("instances");
+            table.innerHTML = list.map(iter => {
+                return `<tr>
+                    <td>${iter.created_by}</td>
+                    <td>${dateformat.format(new Date(iter.created_on.secs_since_epoch * 1000))}</td>
+                </tr>`;
+            }).join("");
+
+            document.getElementById("instance-count").innerHTML = `There are currently ${list.length} instances up`;
         }
     })();
 
